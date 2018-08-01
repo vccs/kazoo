@@ -106,6 +106,8 @@
         ]).
 -export([distribute_event/3]).
 
+-export([log_teletype/2]).
+
 -include("listener_types.hrl").
 
 -define(SERVER, ?MODULE).
@@ -519,6 +521,7 @@ handle_cast({'kz_amqp_assignment', {'new_channel', 'false', Channel}}, State) ->
     _ = kz_amqp_channel:consumer_channel(Channel),
     {'noreply', handle_amqp_channel_available(State)};
 handle_cast({'federated_event', JObj, BasicDeliver, BasicData}, #state{params=Params}=State) ->
+    log_teletype(<<"federated_event">>, JObj),
     case props:is_true('spawn_handle_event', Params, 'false') of
         'true'  -> kz_util:spawn(fun distribute_event/3, [JObj, {BasicDeliver, BasicData}, State]),
                    {'noreply', State};
@@ -835,6 +838,7 @@ distribute_event(CallbackData, JObj, Deliver, #state{responders=Responders
                                                     }=State) ->
     Key = kz_util:get_event_type(JObj),
     Channel = kz_amqp_channel:consumer_channel(),
+    log_teletype(<<"spawning-client-callback">>, JObj),
     _ = [kz_util:spawn(fun client_handle_event/6, [JObj
                                                   ,Channel
                                                   ,ConsumerKey
@@ -871,6 +875,7 @@ client_handle_event(JObj, {Module, Fun, 4}, CallbackData, {BasicDeliver, Basic})
 client_handle_event(JObj, {Module, Fun, 3}, CallbackData, {BasicDeliver, _Basic}) ->
     Module:Fun(JObj, CallbackData, BasicDeliver);
 client_handle_event(JObj, {Module, Fun, 2}, CallbackData, _Deliver) ->
+    log_teletype(<<"call-client-callback">>, JObj),
     Module:Fun(JObj, CallbackData).
 
 -spec callback_handle_event(kz_json:object(), deliver(), state()) ->
@@ -908,6 +913,7 @@ callback_handle_event(JObj
         'ignore' -> 'ignore';
         {'ignore', _NewModuleState} = Reply -> Reply;
         {'reply', Props} when is_list(Props) ->
+            log_teletype(<<"handle-event-called">>, JObj),
             [{'server', Self}
             ,{'queue', Queue}
             ,{'basic', Basic}
@@ -1164,6 +1170,7 @@ update_federated_bindings(#state{bindings=[{Binding, Props}|_]
     case kz_amqp_connections:federated_brokers() of
         [] ->
             lager:debug("no federated brokers to connect to, skipping federating binding '~s'", [Binding]),
+            lager:debug("no federated brokers to connect to, skipping federating binding '~s'", [Binding]),
             State;
         FederatedBrokers ->
             NonFederatedProps = props:delete('federate', Props),
@@ -1375,3 +1382,19 @@ start_listener(Srv, Params) ->
 maybe_configure_auto_ack(Props, 'false') -> Props;
 maybe_configure_auto_ack(Props, 'true') ->
     [{'no_ack', 'false'} | props:delete('no_ack', Props)].
+
+-spec log_teletype(kz_term:ne_binary(), kz_json:object()) -> 'ok'.
+log_teletype(Tag, JObj) ->
+    TeleTest = kz_json:get_value(<<"TELE_TEST">>, JObj),
+    {EventCategory, EventName} = kz_util:get_event_type(JObj),
+    case {TeleTest, EventCategory} of
+        {'undefined', <<"notification">>} ->
+            CallId = kz_util:find_callid(JObj),
+            lager:debug("TELE_TEST - ~s - ~s - ~s", [Tag, EventName, CallId]);
+        {_, <<"notification">>} ->
+            lager:debug("TELE_TEST - ~s - ~s - ~s", [Tag, EventName, TeleTest]);
+        _R ->
+            ?DEV_LOG("~p", [_R]),
+            'ok'
+    end.
+
