@@ -53,6 +53,19 @@ start_modules([]) ->
 notification(JObj) ->
     kz_util:put_callid(JObj),
     {EventCategory, EventName} = kz_util:get_event_type(JObj),
+    maybe_handle_notification(JObj, EventCategory, EventName).
+
+maybe_handle_notification(_, <<"notifications">>, <<"register">>) ->
+    'ok';
+maybe_handle_notification(_, <<"notifications">>, <<"voicemail_save">>) ->
+    'ok';
+maybe_handle_notification(JObj, EventCategory, EventName) ->
+    ShouldHandle = teletype_util:should_handle_notification(JObj),
+    maybe_handle_notification(JObj, EventCategory, EventName, ShouldHandle).
+
+maybe_handle_notification(_, _, _, 'false') ->
+    'ok';
+maybe_handle_notification(JObj, EventCategory, EventName, 'true') ->
     RoutingKey = ?ROUTING_KEY(EventCategory, EventName),
     lager:debug("dispatching notification ~s", [RoutingKey]),
     case kazoo_bindings:map(RoutingKey, JObj) of
