@@ -86,7 +86,7 @@ init([Id, JObj]) ->
     Format = kz_json:get_value(<<"Format">>, JObj, <<"wav">>),
     Engine = kz_json:get_value(<<"Engine">>, JObj),
 
-    {'ok', ReqID, EngineData} = kazoo_tts:create(Engine, Text, Voice, Format, [{'receiver', self()}]),
+    {'ok', ReqID} = kazoo_tts:create(Engine, Text, Voice, Format, [{'receiver', self()}]),
 
     lager:debug("text '~s' has id '~s'", [Text, Id]),
 
@@ -97,7 +97,7 @@ init([Id, JObj]) ->
     {'ok', #state{kz_http_req_id = ReqID
                  ,status = 'streaming'
                  ,meta = Meta
-                 ,engine_data = EngineData
+                 ,engine_data = 'undefined'
                  ,contents = <<>>
                  ,reqs = []
                  ,timer_ref = start_timer()
@@ -191,20 +191,16 @@ handle_info({'http', {ReqID, 'stream_end', _FinalHeaders}}, #state{kz_http_req_i
 handle_info({'http', {ReqID, 'stream_end', _FinalHeaders}}, #state{kz_http_req_id=ReqID
                                                                   ,contents=Contents
                                                                   ,meta=Meta
-                                                                  ,engine_data=EngineData
                                                                   ,reqs=Reqs
                                                                   ,timer_ref=TRef
                                                                   }=State) ->
     _ = stop_timer(TRef),
-    {BinaryContents, NewMeta} = kazoo_tts_google:decode_responce(Contents, EngineData, Meta),
-    Res = {NewMeta, BinaryContents},
+    Res = {Meta, Contents},
     _ = [gen_server:reply(From, Res) || From <- Reqs],
 
     lager:debug("finished receiving file contents: ~p", [kz_util:pretty_print_bytes(byte_size(Contents))]),
     {'noreply', State#state{status=ready
                            ,timer_ref=start_timer()
-                           ,contents=BinaryContents
-                           ,meta=NewMeta
                            }
     ,'hibernate'
     };
