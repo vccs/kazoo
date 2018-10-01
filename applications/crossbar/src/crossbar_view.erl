@@ -758,7 +758,7 @@ get_results(#{databases := [Db|RestDbs]=Dbs
             try handle_query_result(LoadMap, Dbs, JObjs, LimitWithLast)
             catch
                 _E:_T ->
-                    lager:debug("exception occurred during querying db ~s for view ~s", [Db, View]),
+                    lager:debug("exception occurred during querying db ~s for view ~s : ~p:~p", [Db, View, _E, _T]),
                     ST = erlang:get_stacktrace(),
                     kz_util:log_stacktrace(ST),
                     LoadMap#{context => cb_context:add_system_error('datastore_fault', Context)}
@@ -904,15 +904,15 @@ apply_filter(Mapper, JObjs) when is_function(Mapper, 2) ->
 -spec filter_foldl(mapper_fun(), kz_json:objects(), kz_json:objects()) ->
                           kz_json:objects() |
                           {'error', any()}.
-filter_foldl(_Mapper, [], Acc) -> Acc;
+filter_foldl(_Mapper, [], Acc) ->
+    [JObj
+     || JObj <- Acc,
+        not kz_term:is_empty(JObj)
+    ];
 filter_foldl(Mapper, [JObj | JObjs], Acc) ->
-    case Mapper(JObj) of
+    case Mapper(JObj, Acc) of
         {'error', _} = Error -> Error;
-        NewJObj ->
-            case kz_term:is_empty(NewJObj) of
-                'true' -> filter_foldl(Mapper, JObjs, Acc);
-                'false' -> filter_foldl(Mapper, JObjs, [NewJObj | Acc])
-            end
+        NewAcc -> filter_foldl(Mapper, JObjs, NewAcc)
     end.
 
 %%------------------------------------------------------------------------------
