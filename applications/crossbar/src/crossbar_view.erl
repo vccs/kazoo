@@ -792,7 +792,7 @@ handle_query_result(#{last_key := LastKey
 -spec handle_query_result(load_params(), kz_term:ne_binaries(), kz_json:objects(), non_neg_integer(), last_key()) -> load_params().
 handle_query_result(#{is_chunked := 'true'
                      ,context := Context
-                     }=LoadMap, [Db|_] = Dbs, FilteredJObjs, FilteredLength, NewLastKey) ->
+                     }=LoadMap, [Db|_], FilteredJObjs, FilteredLength, NewLastKey) ->
     Setters = [{fun cb_context:set_resp_data/2, FilteredJObjs}
               ,{fun cb_context:set_account_db/2, Db}
               ],
