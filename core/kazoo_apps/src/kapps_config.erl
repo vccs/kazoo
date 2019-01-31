@@ -1066,7 +1066,7 @@ fetch_category(Category, 'false') ->
          ,{<<"speech">>, <<"asr_preferred_content_type">>}
          }
 
-        ,{{<<"callflow">>, [<<"voicemail">>, <<"vm_message_foraward_type">>]}
+        ,{{<<"callflow">>, [<<"voicemail">>, <<"vm_message_forward_type">>]}
          ,{<<"callflow">>, [<<"voicemail">>, <<"vm_message_forward_type">>]}
          }
 
